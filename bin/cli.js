@@ -7,10 +7,45 @@ import inquirer from 'inquirer';
 import fs from 'fs-extra';
 import chalk from 'chalk';
 import { execSync } from 'node:child_process';
+import ora from 'ora';
+
+const log = {
+  info: (message) => console.log(chalk.blue(message)),
+  success: (message) => console.log(chalk.green(message)),
+  warning: (message) => console.log(chalk.yellow(message)),
+  error: (message) => console.log(chalk.red(message)),
+};
+
+const GLOBAL_DEFAULTS = {
+  cssPreprocessor: 'CSS',
+  initGit: true
+};
+
+const executeCommand = (command, errorMessage) => {
+  try {
+    execSync(command, { stdio: 'pipe' });
+  } catch (error) {
+    throw new Error(`${errorMessage}: ${error.message}`);
+  }
+};
+
+const installDependency = (spinner, packageManager, isDev, packageName) => {
+  const command = `${packageManager} ${isDev ? 'add -D' : 'add'} ${packageName}`;
+  spinner.text = `Installing ${packageName}...`;
+  executeCommand(command, `Failed to install ${packageName}`);
+};
+
+const simulateProjectCreation = async (spinner, totalSteps) => {
+  for (let i = 0; i <= totalSteps; i++) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const progress = Math.floor((i / totalSteps) * 100);
+    spinner.text = `Creating project... ${progress}%`;
+  }
+};
 
 program
   .version('1.1.1')
-  .description('Project Generator')
+  .description(chalk.cyan('🚀 Fleem - Project Generator'))
   .arguments('<projectName>')
   .option('--typescript', 'Use TypeScript')
   .option('--jest', 'Add Jest for testing')
@@ -21,10 +56,7 @@ program
   .option('--package-manager <manager>', 'Specify package manager (npm, yarn, pnpm)')
   .option('--global-defaults', 'Use global defaults')
   .action(async (projectName, options) => {
-    const globalDefaults = {
-      cssPreprocessor: 'CSS',
-      initGit: true
-    };
+    console.log(chalk.cyan('\n🛠️  Welcome to Fleem Project Generator! Let\'s set up your project.\n'));
 
     const answers = await inquirer.prompt([
       {
@@ -51,7 +83,7 @@ program
         name: 'cssPreprocessor',
         message: 'CSS preprocessor:',
         choices: ['CSS', 'SCSS', 'LESS'],
-        default: options.scss ? 'SCSS' : (options.globalDefaults ? globalDefaults.cssPreprocessor : 'CSS')
+        default: options.scss ? 'SCSS' : (options.globalDefaults ? GLOBAL_DEFAULTS.cssPreprocessor : 'CSS')
       },
       {
         type: 'confirm',
@@ -70,7 +102,7 @@ program
         type: 'confirm',
         name: 'initGit',
         message: 'Initialize Git repository?',
-        default: options.globalDefaults ? globalDefaults.initGit : true
+        default: options.globalDefaults ? GLOBAL_DEFAULTS.initGit : true
       },
       {
         type: 'list',
@@ -85,76 +117,63 @@ program
 
     try {
       if (fs.existsSync(projectPath)) {
-        console.log(`Error: Directory ${projectPath} already exists.`);
-        return;
+        throw new Error(`Directory ${projectPath} already exists.`);
       }
 
       fs.mkdirSync(projectPath);
       process.chdir(projectPath);
 
-      const useYarn = answers.packageManager === 'yarn';
-      const usePnpm = answers.packageManager === 'pnpm';
-      const pkgInstall = usePnpm ? 'pnpm add' : useYarn ? 'yarn add' : 'npm install';
-      const pkgInstallDev = usePnpm ? 'pnpm add -D' : useYarn ? 'yarn add --dev' : 'npm install --save-dev';
+      const packageManager = answers.packageManager === 'pnpm' ? 'pnpm' : answers.packageManager === 'yarn' ? 'yarn' : 'npm';
 
-      console.log(chalk.blue('Creating project...'));
-      execSync(`npx create-react-app . ${answers.typescript ? '--template typescript' : ''}`, { stdio: 'pipe' });
-      console.log(chalk.green('Project created successfully.'));
+      const spinner = ora('Creating project...').start();
+      await simulateProjectCreation(spinner, 100);
+      executeCommand(`npx create-react-app . ${answers.typescript ? '--template typescript' : ''}`, 'Failed to create React app');
+      spinner.succeed('Project created successfully.');
 
       if (answers.testing !== 'None') {
-        console.log(chalk.blue(`Adding ${answers.testing} for testing...`));
-        execSync(`${pkgInstallDev} ${answers.testing.toLowerCase()}`, { stdio: 'pipe' });
-        console.log(chalk.green(`Added ${answers.testing} for testing.`));
+        installDependency(spinner, packageManager, true, answers.testing.toLowerCase());
       }
 
       if (answers.prettier) {
-        console.log(chalk.blue('Adding Prettier...'));
-        execSync(`${pkgInstallDev} prettier`, { stdio: 'pipe' });
-        console.log(chalk.green('Added Prettier for code formatting.'));
+        installDependency(spinner, packageManager, true, 'prettier');
       }
 
       if (answers.cssPreprocessor !== 'CSS') {
-        console.log(chalk.blue(`Adding ${answers.cssPreprocessor}...`));
-        execSync(`${pkgInstallDev} ${answers.cssPreprocessor.toLowerCase()}`, { stdio: 'pipe' });
-        console.log(chalk.green(`Added ${answers.cssPreprocessor} for styling.`));
+        installDependency(spinner, packageManager, true, answers.cssPreprocessor.toLowerCase());
       }
 
       if (answers.routing) {
-        console.log(chalk.blue('Adding routing...'));
-        execSync(`${pkgInstall} react-router-dom`, { stdio: 'pipe' });
-        console.log(chalk.green('Added routing.'));
+        installDependency(spinner, packageManager, false, 'react-router-dom');
       }
 
       if (answers.stateManagement !== 'None') {
-        console.log(chalk.blue(`Adding ${answers.stateManagement}...`));
-        execSync(`${pkgInstall} ${answers.stateManagement.toLowerCase()}`, { stdio: 'pipe' });
-        console.log(chalk.green(`Added ${answers.stateManagement} for state management.`));
+        installDependency(spinner, packageManager, false, answers.stateManagement.toLowerCase());
       }
 
       if (answers.initGit) {
-        console.log(chalk.blue('Initializing Git repository...'));
-        execSync('git init', { stdio: 'pipe' });
-        execSync('git add .', { stdio: 'pipe' });
+        spinner.text = 'Initializing Git repository...';
+        executeCommand('git init', 'Failed to initialize Git repository');
+        executeCommand('git add .', 'Failed to stage files');
         try {
-          execSync('git commit -m "Initial commit"', { stdio: 'pipe' });
-          console.log(chalk.green('Initialized Git repository.'));
+          executeCommand('git commit -m "Initial commit"', 'Failed to create initial commit');
+          spinner.succeed('Initialized Git repository.');
         } catch {
-          console.log(chalk.yellow('Warning: Unable to create initial commit.'));
+          spinner.warn('Warning: Unable to create initial commit.');
         }
       }
 
-      execSync('code .', { stdio: 'pipe' });
-      console.log(chalk.green(`Project ${projectName} created.`));
-      console.log(chalk.green(`Location: ${projectPath}`));
-      console.log(chalk.green('Project creation complete.'));
+      executeCommand('code .', 'Failed to open VS Code');
+      log.success(`\n📁 Location: ${chalk.cyan(projectPath)}`);
+      log.success(`🎉 Fleem has successfully created your project: ${chalk.cyan(projectName)}. Best of luck on your project.\n`);
+
     } catch (error) {
-      console.log(chalk.red('Error occurred:'));
-      console.log(chalk.red(error.message));
-      console.log(chalk.yellow('Cleaning up...'));
+      log.error('An error occurred:');
+      log.error(error.message);
+      log.warning('Cleaning up...');
       if (fs.existsSync(projectPath)) {
         fs.removeSync(projectPath);
       }
-      console.log(chalk.yellow('Cleanup complete. Please try again.'));
+      log.warning('Cleanup complete. Please try again.');
     }
   });
 
