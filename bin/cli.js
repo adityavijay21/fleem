@@ -9,7 +9,7 @@ import chalk from 'chalk';
 import { execSync } from 'node:child_process';
 
 program
-  .version('1.0.0')
+  .version('1.1.1')
   .description('Project Generator')
   .arguments('<projectName>')
   .option('--typescript', 'Use TypeScript')
