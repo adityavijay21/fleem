@@ -1,6 +1,6 @@
 {
   "name": "fleem",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "A powerful CLI tool for creating customizable React projects anywhere on your system",
   "main": "bin/cli.js",
   "bin": {
@@ -26,7 +26,18 @@
     "prettier",
     "scss",
     "routing",
-    "state-management"
+    "state-management",
+    "react-cli",
+    "react-setup",
+    "react-boilerplate",
+    "react-starter",
+    "react-template",
+    "react-generator",
+    "react-project",
+    "react-tool",
+    "react-utility",
+    "react-development",
+    "react-automation"
   ],
   "author": "Aditya Vijay",
   "license": "MIT",
@@ -37,7 +48,7 @@
   "bugs": {
     "url": "https://github.com/adityavijay21/fleem/issues"
   },
-  "homepage": "https://github.com/adityavijay21/fleem#readme",
+  "homepage": "https://www.fleem.is-a.dev",
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^9.4.1",
