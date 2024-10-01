@@ -9,37 +9,43 @@ import chalk from 'chalk';
 import { execSync } from 'node:child_process';
 import ora from 'ora';
 
-// Utility functions
 const log = {
-  info: message => console.log(chalk.blue(message)),
-  success: message => console.log(chalk.green(message)),
-  warning: message => console.log(chalk.yellow(message)),
-  error: message => console.log(chalk.red(message)),
+  info: m => console.log(chalk.blue(m)),
+  success: m => console.log(chalk.green(m)),
+  warning: m => console.log(chalk.yellow(m)),
+  error: m => console.log(chalk.red(m)),
 };
 
-const executeCommand = (command, errorMessage) => {
+const executeCommand = (cmd, errMsg) => {
   try {
-    execSync(command, { stdio: 'pipe' });
-  } catch (error) {
-    throw new Error(`${errorMessage}: ${error.message}`);
+    execSync(cmd, { stdio: 'pipe' });
+  } catch (err) {
+    throw new Error(`${errMsg}: ${err.message}`);
   }
 };
 
-const installDependency = (spinner, packageManager, isDev, packageName) => {
-  const command = `${packageManager} ${isDev ? 'add -D' : 'add'} ${packageName}`;
-  spinner.text = `Installing ${packageName}...`;
-  executeCommand(command, `Failed to install ${packageName}`);
-};
-
-const simulateProjectCreation = async (spinner, totalSteps) => {
-  for (let i = 0; i <= totalSteps; i++) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const progress = Math.floor((i / totalSteps) * 100);
-    spinner.text = `Creating project... ${progress}%`;
+const installDependencies = async (spinner, pm, deps) => {
+  if (deps.length) {
+    spinner.text = 'Installing dependencies...';
+    await executeCommand(`${pm} ${pm === 'npm' ? 'install' : 'add'} ${deps.join(' ')}`, 'Failed to install dependencies');
   }
 };
 
-// Configuration
+const simulateProjectCreation = async (spinner) => {
+  const steps = [
+    'Creating package.json',
+    'Setting up project structure',
+    'Adding configuration files',
+    'Installing dependencies',
+    'Finalizing setup'
+  ];
+
+  for (let i = 0; i < steps.length; i++) {
+    spinner.text = `${steps[i]}... ${(i + 1) * 20}%`;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+};
+
 const DEFAULT_OPTIONS = {
   typescript: false,
   testing: 'None',
@@ -51,34 +57,21 @@ const DEFAULT_OPTIONS = {
   packageManager: 'npm'
 };
 
-// Setup functions
-const setupTailwind = (spinner, packageManager) => {
+const setupTailwind = async (spinner, pm) => {
   spinner.text = 'Setting up Tailwind CSS...';
-  installDependency(spinner, packageManager, true, 'tailwindcss@latest postcss@latest autoprefixer@latest');
-  executeCommand('npx tailwindcss init -p', 'Failed to initialize Tailwind CSS');
+  await executeCommand(`${pm} ${pm === 'npm' ? 'install --save-dev' : 'add -D'} tailwindcss@latest postcss@latest autoprefixer@latest`, 'Failed to install Tailwind CSS');
+  await executeCommand('npx tailwindcss init -p', 'Failed to initialize Tailwind CSS');
   
-  const tailwindConfig = `
-module.exports = {
-  content: ["./src/**/*.{js,jsx,ts,tsx}"],
-  theme: { extend: {} },
-  plugins: [],
-}`;
-  fs.writeFileSync('tailwind.config.js', tailwindConfig);
-
-  const indexCSS = `
-@tailwind base;
-@tailwind components;
-@tailwind utilities;`;
-  fs.writeFileSync('src/index.css', indexCSS);
+  fs.writeFileSync('tailwind.config.js', `module.exports = {content: ["./src/**/*.{js,jsx,ts,tsx}"],theme: { extend: {} },plugins: [],}`);
+  fs.writeFileSync('src/index.css', '@tailwind base;@tailwind components;@tailwind utilities;');
 
   spinner.succeed('Tailwind CSS set up successfully.');
 };
 
-// Main functions
-const upgradeFleem = () => {
+const upgradeFleem = async () => {
   const spinner = ora('Upgrading Fleem...').start();
   try {
-    executeCommand('npm install -g fleem@latest', 'Failed to upgrade Fleem');
+    await executeCommand('npm install -g fleem@latest', 'Failed to upgrade Fleem');
     spinner.succeed('Fleem has been successfully upgraded to the latest version.');
   } catch (error) {
     spinner.fail('Failed to upgrade Fleem.');
@@ -93,72 +86,53 @@ const createProject = async (projectName, options) => {
     {
       type: 'confirm',
       name: 'typescript',
-      message: 'Would you like to use TypeScript?',
+      message: 'Use TypeScript?',
       default: options.typescript || DEFAULT_OPTIONS.typescript
     },
     {
       type: 'list',
       name: 'testing',
-      message: 'Which testing framework would you prefer?',
-      choices: [
-        { name: 'Jest (Recommended)', value: 'Jest' },
-        { name: 'Mocha', value: 'Mocha' },
-        { name: 'Chai', value: 'Chai' },
-        { name: 'None', value: 'None' }
-      ],
+      message: 'Testing framework?',
+      choices: ['Jest (Recommended)', 'Mocha', 'Chai', 'None'],
       default: options.jest ? 'Jest' : DEFAULT_OPTIONS.testing
     },
     {
       type: 'confirm',
       name: 'prettier',
-      message: 'Would you like to add Prettier for code formatting?',
+      message: 'Add Prettier for code formatting?',
       default: options.prettier || DEFAULT_OPTIONS.prettier
     },
     {
       type: 'list',
       name: 'cssPreprocessor',
-      message: 'Which CSS solution would you like to use?',
-      choices: [
-        { name: 'Plain CSS', value: 'CSS' },
-        { name: 'SCSS - Sassy CSS', value: 'SCSS' },
-        { name: 'LESS - Leaner CSS', value: 'LESS' },
-        { name: 'Tailwind CSS - Utility-first CSS framework', value: 'Tailwind CSS' }
-      ],
+      message: 'CSS solution?',
+      choices: ['Plain CSS', 'SCSS', 'LESS', 'Tailwind CSS'],
       default: options.scss ? 'SCSS' : DEFAULT_OPTIONS.cssPreprocessor
     },
     {
       type: 'confirm',
       name: 'routing',
-      message: 'Would you like to add routing to your project?',
+      message: 'Add routing?',
       default: options.routing || DEFAULT_OPTIONS.routing
     },
     {
       type: 'list',
       name: 'stateManagement',
-      message: 'Which state management tool would you like to use?',
-      choices: [
-        { name: 'None - Use React\'s built-in state management', value: 'None' },
-        { name: 'Redux - A Predictable State Container', value: 'Redux' },
-        { name: 'MobX - Simple, scalable state management', value: 'MobX' },
-        { name: 'Zustand - A small, fast and scalable bearbones state-management solution', value: 'Zustand' }
-      ],
+      message: 'State management tool?',
+      choices: ['None', 'Redux', 'MobX', 'Zustand'],
       default: options.stateManagement || DEFAULT_OPTIONS.stateManagement
     },
     {
       type: 'confirm',
       name: 'initGit',
-      message: 'Would you like to initialize a Git repository?',
+      message: 'Initialize Git repository?',
       default: DEFAULT_OPTIONS.initGit
     },
     {
       type: 'list',
       name: 'packageManager',
-      message: 'Which package manager would you like to use?',
-      choices: [
-        { name: 'npm - Node Package Manager (default)', value: 'npm' },
-        { name: 'yarn - Fast, reliable, and secure dependency management', value: 'yarn' },
-        { name: 'pnpm - Fast, disk space efficient package manager', value: 'pnpm' }
-      ],
+      message: 'Package manager?',
+      choices: ['npm', 'yarn', 'pnpm'],
       default: options.packageManager || DEFAULT_OPTIONS.packageManager
     }
   ];
@@ -175,48 +149,36 @@ const createProject = async (projectName, options) => {
     fs.mkdirSync(projectPath);
     process.chdir(projectPath);
 
-    const packageManager = answers.packageManager === 'pnpm' ? 'pnpm' : answers.packageManager === 'yarn' ? 'yarn' : 'npm';
-
+    const pm = answers.packageManager;
     const spinner = ora('Creating project...').start();
-    await simulateProjectCreation(spinner, 100);
-    executeCommand(`npx create-react-app . ${answers.typescript ? '--template typescript' : ''}`, 'Failed to create React app');
-    spinner.succeed('Project created successfully.');
 
-    if (answers.testing !== 'None') {
-      installDependency(spinner, packageManager, true, answers.testing.toLowerCase());
-    }
+    await executeCommand(`npx create-react-app . ${answers.typescript ? '--template typescript' : ''}`, 'Failed to create React app');
 
-    if (answers.prettier) {
-      installDependency(spinner, packageManager, true, 'prettier');
-    }
+    const deps = [
+      answers.testing !== 'None' && answers.testing.toLowerCase(),
+      answers.prettier && 'prettier',
+      answers.cssPreprocessor !== 'CSS' && answers.cssPreprocessor !== 'Tailwind CSS' && answers.cssPreprocessor.toLowerCase(),
+      answers.routing && 'react-router-dom',
+      answers.stateManagement !== 'None' && answers.stateManagement.toLowerCase()
+    ].filter(Boolean);
 
     if (answers.cssPreprocessor === 'Tailwind CSS') {
-      setupTailwind(spinner, packageManager);
-    } else if (answers.cssPreprocessor !== 'CSS') {
-      installDependency(spinner, packageManager, true, answers.cssPreprocessor.toLowerCase());
+      await setupTailwind(spinner, pm);
     }
 
-    if (answers.routing) {
-      installDependency(spinner, packageManager, false, 'react-router-dom');
-    }
-
-    if (answers.stateManagement !== 'None') {
-      installDependency(spinner, packageManager, false, answers.stateManagement.toLowerCase());
-    }
+    await installDependencies(spinner, pm, deps);
 
     if (answers.initGit) {
       spinner.text = 'Initializing Git repository...';
-      executeCommand('git init', 'Failed to initialize Git repository');
-      executeCommand('git add .', 'Failed to stage files');
-      try {
-        executeCommand('git commit -m "Initial commit"', 'Failed to create initial commit');
-        spinner.succeed('Initialized Git repository.');
-      } catch {
-        spinner.warn('Warning: Unable to create initial commit.');
-      }
+      await executeCommand('git init && git add . && git commit -m "Initial commit"', 'Failed to initialize Git repository');
     }
 
-    executeCommand('code .', 'Failed to open VS Code');
+    await simulateProjectCreation(spinner);
+
+    await executeCommand('code .', 'Failed to open VS Code');
+
+    spinner.succeed('Project created successfully.');
+
     log.success(`\n📁 Project created at: ${chalk.cyan(projectPath)}`);
     log.success(`🎉 Fleem has successfully set up your project: ${chalk.cyan(projectName)}. Happy coding!\n`);
 
@@ -231,7 +193,6 @@ const createProject = async (projectName, options) => {
   }
 };
 
-// CLI configuration
 program
   .version('1.1.2')
   .description(chalk.cyan('🚀 Fleem - The Ultimate React Project Generator'))
