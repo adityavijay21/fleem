@@ -233,7 +233,6 @@ export default App;
 `;
 
     fs.writeFileSync(path.join(projectPath, 'src', 'App.js'), newContent, 'utf8');
-    console.log('Updated src/App.js with custom content');
 
   } catch (error) {
     // Handle errors and clean up if necessary
